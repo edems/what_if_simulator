@@ -1,0 +1,31 @@
+Leistung_Code,Leistung_Name,Tarifart,Basispreis_CHF,Beispielmenge_pro_Jahr
+L001,Konsultation Hausarzt 10-20 min,Konsultation,120.0,450
+L002,Konsultation Hausarzt <10 min,Konsultation,60.0,300
+L003,Notfallkonsultation (Kurz),Konsultation,180.0,80
+L004,EKG Ruhe,Diagnostik,80.0,50
+L005,Röntgen Thorax (1 Ebene),Bildgebung,150.0,40
+L006,Ultraschall Abdomen (Grund),Bildgebung,220.0,30
+L007,CT Abdomen (kontrastfrei),Bildgebung,600.0,15
+L008,"Blutentnahme (Labor, venös)",Labor,25.0,400
+L009,Labor: Komplettes Blutbild (CBC),Labor,35.0,350
+L010,Labor: Elektrolyte / Basiscocktail,Labor,45.0,300
+L011,Infusion (IV) – einfache Applikation,Therapie,70.0,150
+L012,Wundversorgung (klein),Therapie,90.0,100
+L013,"Impfung (Standard, inkl. Material)",Prävention,40.0,250
+L014,Spirometrie (Lungenfunktion),Diagnostik,95.0,60
+L015,Orthopädische Injektion (Gelenk/Bursa),Therapie,110.0,40
+L016,Kleine Operation ambulant,Chirurgie,800.0,10
+L017,Anästhesie Basis (Kurz),Chirurgie,200.0,10
+L018,Kardiologische Konsultation (Spezial),Konsultation,220.0,40
+L019,Dermatologische Beratung,Konsultation,130.0,50
+L020,Gynäkologische Untersuchung (inkl. Basis),Konsultation,160.0,40
+L021,Bildgebung: MRT Kopf (Teil),Bildgebung,900.0,8
+L022,Telemedizinische Konsultation,Konsultation,70.0,100
+L023,Labortest: Mikrobiologie (Abstrich),Labor,55.0,80
+L024,Physiotherapie - einfache Sitzung,Therapie,85.0,120
+L025,Augenuntersuchung (Grund),Diagnostik,110.0,30
+L026,Diabetes-Management (Langzeit-Check),Konsultation,140.0,40
+L027,Speziallabor: Tumormarker (ein Panel),Labor,220.0,15
+L028,Endoskopie – Diagnostisch (Teil),Chirurgie,750.0,5
+L029,Konsultation - Facharzt (30 min),Konsultation,250.0,30
+L030,Präoperative Abklärung (Basis),Konsultation,180.0,15

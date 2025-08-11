@@ -1,8 +1,5 @@
 """
-prototype_newindex.py — Optimized for Negotiation Benefits
-Includes:
-- Additional KPIs for tariff negotiation scenarios
-- Works with updated streamlit_app.py
+prototype_newindex.py — CSV-driven synthetic generator & negotiation KPIs
 """
 from __future__ import annotations
 from pydantic import BaseModel, Field
@@ -11,15 +8,18 @@ from datetime import date, datetime
 import numpy as np
 import pandas as pd
 import math
+import os
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
+CATALOG_FILENAME = "services_catalog.csv"
+
 class Leistung(BaseModel):
-    leistung_code: str = Field(..., description="Codierter Leistungsschlüssel (z.B. L100)")
+    leistung_code: str = Field(...)
     name: Optional[str] = None
-    basispreis: float = Field(..., description="aktueller Basispreis pro Einheit (CHF)")
-    einheit: str = Field("Stück", description="Einheit, z.B. 'Stück', 'Min.', 'kB'")
+    basispreis: float = Field(...)
+    einheit: str = Field("Stück")
     tarifart: Optional[str] = None
 
 class Arzt(BaseModel):
@@ -64,17 +64,23 @@ class PrognoseResult(BaseModel):
     hochrechnung_5jahre: Optional[float] = None
     top_leistungen_impact: Optional[List[str]] = None
 
-def generate_synthetic_data(n_aerzte: int = 500, n_leistungen: int = 30, seed: int = 42) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    np.random.seed(seed)
-    leistungen = []
-    for i in range(n_leistungen):
-        code = f"L{i+1:03d}"
-        basispreis = float(np.round(20 + np.random.rand()*180, 2))
-        leistungen.append({"leistung_code": code, "basispreis": basispreis, "name": f"Leistung {code}"})
-    services_df = pd.DataFrame(leistungen)
+def load_services_catalog(path: Optional[str] = None) -> pd.DataFrame:
+    if path is None:
+        path = os.path.join(os.path.dirname(__file__), CATALOG_FILENAME)
+    df = pd.read_csv(path)
+    required = ["Leistung_Code","Leistung_Name","Tarifart","Basispreis_CHF","Beispielmenge_pro_Jahr"]
+    missing = [c for c in df.columns if c not in required]
+    # Not strict here; we enforce in streamlit, but prototype can work with minimal columns
+    return df
 
+def generate_synthetic_data(n_aerzte: int = 500, seed: int = 42, catalog_path: Optional[str] = None
+                           ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    np.random.seed(seed)
+    services_df = pd.read_csv(catalog_path) if catalog_path else load_services_catalog()
+
+    # Ärzte
     kantone = ["ZH","BE","LU","UR","SZ","OW","NW","GL","ZG","FR","SO","BS","BL","SH","AR","AI","SG","GR","AG","TG","TI","VD","VS","NE","GE","JU"]
-    fachgebiet_list = ["Allgemein","Innere","Chirurgie","Gyn","Pediatrie","Radiologie"]
+    fachgebiet_list = ["Allgemein","Innere","Chirurgie","Gyn","Pediatrie","Radiologie","Dermatologie","Kardiologie","Orthopädie"]
     aerzte = []
     for a in range(1, n_aerzte+1):
         aerzte.append({"arzt_id": a,
@@ -82,26 +88,30 @@ def generate_synthetic_data(n_aerzte: int = 500, n_leistungen: int = 30, seed: i
                        "fachgebiet": np.random.choice(fachgebiet_list)})
     aerzte_df = pd.DataFrame(aerzte)
 
+    # Records
     rows = []
     record_id = 1
     for _, ar in aerzte_df.iterrows():
-        n_used = np.random.randint(5, min(20, n_leistungen))
+        n_used = np.random.randint(8, min(25, len(services_df)))
         used = services_df.sample(n_used, replace=False)
         for _, svc in used.iterrows():
-            lam = np.clip( np.random.rand()*30 + 5, 1, 200 )
+            base = float(svc["Basispreis_CHF"])
+            menge_ref = float(svc["Beispielmenge_pro_Jahr"])
+            lam = max(1, int(np.clip(menge_ref * (0.6 + 0.8*np.random.rand()), 1, 2000)))
             menge = int(max(0, np.random.poisson(lam)))
-            preis = float(svc["basispreis"] * (0.9 + 0.2*np.random.rand()))
+            preis = float(base * (0.9 + 0.2*np.random.rand()))
             total = round(menge * preis, 2)
             rows.append({
                 "record_id": record_id,
                 "arzt_id": int(ar["arzt_id"]),
-                "leistung_code": svc["leistung_code"],
+                "leistung_code": svc["Leistung_Code"],
                 "datum": date(2024, 1, 1),
                 "menge": int(menge),
                 "preis_pro_einheit": float(preis),
                 "total": float(total),
                 "kanton": ar["kanton"],
-                "fachgebiet": ar["fachgebiet"]
+                "fachgebiet": ar["fachgebiet"],
+                "tarifart": svc["Tarifart"]
             })
             record_id += 1
 
@@ -176,11 +186,11 @@ def deterministic_scenario_eval(records_df: pd.DataFrame, scenario: List[Dict[st
     # Additional negotiation KPIs
     summary["ersparnis_pro_arzt"] = summary["absolut_diff"] / max(1, summary["anzahl_betroffene_aerzte"])
     summary["hochrechnung_5jahre"] = summary["absolut_diff"] * 5
-    leistung_diff = df.groupby("leistung_code")[["total","new_total"]].sum()
+    leistung_diff = df.groupby(["leistung_code"])[["total","new_total"]].sum()
     leistung_diff["diff"] = leistung_diff["new_total"] - leistung_diff["total"]
     summary["top_leistungen_impact"] = leistung_diff["diff"].sort_values().head(3).index.tolist()
 
-    return comp, summary
+    return comp, summary, df
 
 def ml_scenario_eval(model, records_df: pd.DataFrame, scenario: List[Dict[str, Any]], top_services: List[str], model_feature_order: List[str]):
     df = records_df.copy()
@@ -205,42 +215,3 @@ def ml_scenario_eval(model, records_df: pd.DataFrame, scenario: List[Dict[str, A
     Xnew = agg.reindex(columns=model_feature_order, fill_value=0)
     preds = model.predict(Xnew)
     return preds, Xnew
-
-def run_demo():
-    print("Generating synthetic data...")
-    records_df, services_df, aerzte_df = generate_synthetic_data(n_aerzte=600, n_leistungen=40)
-    print("Building features...")
-    X, y, top_services = build_aggregate_features(records_df, top_n_services=20)
-    print("Training model...")
-    model, rmse, model_feature_order = train_model(X, y)
-    print(f"Model trained. RMSE: {rmse:.2f} CHF")
-
-    scenario = [
-        {"leistung_code":"L005", "preis_multiplikator":1.20},
-        {"leistung_code":"L012", "menge_multiplikator":0.90}
-    ]
-
-    comp, summary_det = deterministic_scenario_eval(records_df, scenario)
-    print("Deterministic summary:", summary_det)
-
-    preds_new, _ = ml_scenario_eval(model, records_df, scenario, top_services, model_feature_order)
-    prognose_ml_total = float(preds_new.sum())
-    print("ML predicted total:", round(prognose_ml_total,2))
-
-    report = PrognoseResult(
-        szenario_id=1,
-        aggregierter_alt_betrag=summary_det["aggregierter_alt_betrag"],
-        aggregierter_neu_betrag=summary_det["aggregierter_neu_betrag"],
-        absolut_diff=summary_det["absolut_diff"],
-        rel_diff_pct=summary_det["rel_diff_pct"],
-        anzahl_betroffene_aerzte=summary_det["anzahl_betroffene_aerzte"],
-        modell_version="gbm-v1",
-        kommentar="Deterministische und ML-Sicht wurden erzeugt.",
-        ersparnis_pro_arzt=summary_det["ersparnis_pro_arzt"],
-        hochrechnung_5jahre=summary_det["hochrechnung_5jahre"],
-        top_leistungen_impact=summary_det["top_leistungen_impact"]
-    )
-    print(report.model_dump_json(indent=2))
-
-if __name__ == "__main__":
-    run_demo()
